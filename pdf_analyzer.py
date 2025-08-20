@@ -8,7 +8,7 @@ import pandas as pd
 import re
 from datetime import datetime
 
-class NotaCobretagemAnalyzer:
+class NotaCorretagemAnalyzer:
     """Classe para análise avançada de PDFs de notas de corretagem"""
     
     def __init__(self, caminho_pdf):
@@ -218,5 +218,5 @@ class NotaCobretagemAnalyzer:
 # Função auxiliar para analisar um PDF e retornar os dados extraídos
 def analisar_pdf_nota_corretagem(caminho_pdf):
     """Analisa um PDF de nota de corretagem e retorna os dados extraídos"""
-    analyzer = NotaCobretagemAnalyzer(caminho_pdf)
+    analyzer = NotaCorretagemAnalyzer(caminho_pdf)
     return analyzer.analisar()
