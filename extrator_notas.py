@@ -12,6 +12,57 @@ import PyPDF2
 from datetime import datetime
 from extrair_futuros import extrair_contratos_futuros
 
+
+def buscar_secoes_transacoes(texto):
+    """Retorna blocos de texto com maior chance de conter transações."""
+    if not texto:
+        return []
+
+    linhas = texto.splitlines()
+    secoes = []
+    bloco_atual = []
+
+    padroes_inicio = [
+        r'neg[oó]cios\s+realizados',
+        r'resumo\s+dos\s+neg[oó]cios',
+        r'b3\s+rvlistado',
+        r'c/v\s+mercadoria',
+        r'mercado\s+futuro',
+        r'bolsa'
+    ]
+    padroes_fim = [
+        r'resumo\s+financeiro',
+        r'custos\s+operacionais',
+        r'liquida[cç][aã]o',
+        r'observa[cç][oõ]es',
+        r'total\s+l[ií]quido'
+    ]
+
+    for linha in linhas:
+        linha_limpa = linha.strip()
+        if not linha_limpa:
+            continue
+
+        linha_lower = linha_limpa.lower()
+        eh_inicio = any(re.search(p, linha_lower) for p in padroes_inicio)
+        eh_fim = any(re.search(p, linha_lower) for p in padroes_fim)
+
+        if eh_inicio and bloco_atual:
+            secoes.append("\n".join(bloco_atual))
+            bloco_atual = []
+
+        if eh_inicio or bloco_atual:
+            bloco_atual.append(linha_limpa)
+
+        if eh_fim and bloco_atual:
+            secoes.append("\n".join(bloco_atual))
+            bloco_atual = []
+
+    if bloco_atual:
+        secoes.append("\n".join(bloco_atual))
+
+    return secoes
+
 def extrair_nota_corretagem(caminho_arquivo, modo_debug=False):
     """
     Extrai todas as informações relevantes de uma nota de corretagem.

@@ -13,11 +13,10 @@ import warnings
 import logging
 from correpy.parsers.brokerage_notes.parser_factory import ParserFactory
 import re
-import os
 import pdfplumber
 
 # Importar o módulo de extração de futuros
-from extrair_futuros_direto import main as extrair_futuros_main, extrair_contratos_futuros, extrair_texto_pdf
+from extrair_futuros_direto import main as extrair_futuros_main
 
 # Configurar para ignorar avisos específicos (como CropBox missing)
 warnings.filterwarnings("ignore")
@@ -132,27 +131,6 @@ def extrair_contratos_futuros(texto):
     
     return transacoes
 
-def detectar_contratos_futuros(caminho_pdf, logger=None):
-    """Função principal para detectar contratos futuros em um PDF"""
-    try:
-        texto = extrair_texto_pdf(caminho_pdf)
-        transacoes = extrair_contratos_futuros(texto)
-        
-        if logger:
-            logger.log(f"Encontradas {len(transacoes)} transações de contratos futuros", "sucesso")
-        else:
-            print(f"\nEncontradas {len(transacoes)} transações de contratos futuros:")
-            for i, t in enumerate(transacoes, 1):
-                print(f"  {i}. {t['tipo']} {t['ativo']} - {t['quantidade']} x {t['preco']} = {t['valor_total']:.2f}")
-        
-        return transacoes
-    except Exception as e:
-        if logger:
-            logger.log(f"Erro ao detectar contratos futuros: {str(e)}", "erro")
-        else:
-            print(f"Erro ao detectar contratos futuros: {e}")
-        return []
-
 # Importar analisadores de PDF personalizados (do menos para o mais avançado)
 try:
     from pdf_analyzer import analisar_pdf_nota_corretagem
@@ -246,7 +224,7 @@ def processar_arquivo_pdf(caminho_pdf, dados_por_mes, logger):
             
             # Se não há transações e algum analisador customizado está disponível, usar ele como fallback
             if total_transacoes_correpy == 0 and (PDF_ANALYZER_DISPONIVEL or ADVANCED_PARSER_DISPONIVEL or EXTRATOR_DIRETO_DISPONIVEL):
-                logger.log(f"  → Nenhuma transação encontrada com correpy. Tentando com analisadores customizados...", "info")
+                logger.log("  → Nenhuma transação encontrada com correpy. Tentando com analisadores customizados...", "info")
                 resultado_analise = tentar_analisador_customizado(caminho_pdf, logger)
                 
                 if resultado_analise and resultado_analise.get("transacoes"):
@@ -271,7 +249,7 @@ def processar_arquivo_pdf(caminho_pdf, dados_por_mes, logger):
                 # Se não há transações, vamos tentar extrair contratos futuros desta nota
                 if len(nota.transactions) == 0:
                     # Tentativa de extração de contratos futuros para cada nota individual
-                    logger.log(f"     - Tentando extrair contratos futuros nesta nota...", "alerta")
+                    logger.log("     - Tentando extrair contratos futuros nesta nota...", "alerta")
                     
                     try:
                         # Extrair texto do PDF para esta nota
@@ -363,7 +341,7 @@ def processar_arquivo_pdf(caminho_pdf, dados_por_mes, logger):
                                                str(reg.get('Preço Unitário', 0)),
                                                str(reg.get('Ativo', '')))
                                     registros_existentes.append(chave_excel)
-                                except Exception as e:
+                                except Exception:
                                     # Ignorar erros na criação de chaves
                                     pass
                             
@@ -428,7 +406,7 @@ def processar_arquivo_pdf(caminho_pdf, dados_por_mes, logger):
                         logger.log(f"     - Erro ao extrair contratos futuros: {str(e)}", "erro")
                     
                     # Se continuou aqui, não encontrou contratos futuros
-                    logger.log(f"     - Alerta: Nenhuma transação encontrada nesta nota", "alerta")
+                    logger.log("     - Alerta: Nenhuma transação encontrada nesta nota", "alerta")
                     
                     # Adicionar dados da nota sem transações no relatório
                     data_referencia = nota.reference_date
@@ -479,7 +457,7 @@ def processar_arquivo_pdf(caminho_pdf, dados_por_mes, logger):
                 else:
                     # Processamento normal para notas com transações
                     data_referencia = nota.reference_date
-                    mes_ano = data_referencia.strftime('%Y-%m')
+                    mes_ano = data_referencia.strftime('%Y_%m')
                     nota_transacoes = len(nota.transactions)
                     total_transacoes += nota_transacoes
                     
@@ -532,7 +510,7 @@ def processar_arquivo_pdf(caminho_pdf, dados_por_mes, logger):
         
         # Se falhou com correpy, tenta com os analisadores customizados disponíveis
         if (PDF_ANALYZER_DISPONIVEL or ADVANCED_PARSER_DISPONIVEL or EXTRATOR_DIRETO_DISPONIVEL) and not uso_analisador_custom:
-            logger.log(f"  → Tentando processar com analisadores customizados (modo diagnóstico ativado)...", "info")
+            logger.log("  → Tentando processar com analisadores customizados (modo diagnóstico ativado)...", "info")
             resultado_analise = tentar_analisador_customizado(caminho_pdf, logger, modo_debug=True)
             
             # Sempre verificar se existem contratos futuros no PDF, independentemente do resultado anterior
@@ -567,13 +545,14 @@ def processar_arquivo_pdf(caminho_pdf, dados_por_mes, logger):
                         logger.log(f"Total agora: {len(transa_existentes)} transações combinadas", "sucesso")
             except Exception as e:
                 logger.log(f"Erro ao extrair contratos futuros: {str(e)}", "erro")
-                
-                # Usar os dados do analisador customizado
+
+            # Usar os dados do analisador customizado quando houver resultado válido
+            if resultado_analise:
                 processar_resultado_customizado(resultado_analise, dados_por_mes, logger)
                 total_notas = 1  # Consideramos uma nota bem-sucedida
                 total_transacoes = len(resultado_analise.get("transacoes", []))
                 return True, total_notas, total_transacoes
-        
+
         return False, 0, 0
 
 # Função para tentar ler PDF com analisador customizado
@@ -586,7 +565,7 @@ def tentar_analisador_customizado(caminho_pdf, logger, modo_debug=True):
             resultado = extrair_nota_direto(caminho_pdf, modo_debug=modo_debug)
             
             if resultado and resultado.get("sucesso"):
-                logger.log(f"  → Extrator direto conseguiu extrair dados da nota", "sucesso")
+                logger.log("  → Extrator direto conseguiu extrair dados da nota", "sucesso")
                 # Mostrar informações básicas da nota
                 logger.log(f"     - Número da Nota: {resultado.get('numero_nota', 'N/A')}")
                 logger.log(f"     - Data: {resultado.get('data_nota', 'N/A')}")
@@ -599,7 +578,7 @@ def tentar_analisador_customizado(caminho_pdf, logger, modo_debug=True):
                 
                 # Se não houver transações, tentar extrair contratos futuros diretamente
                 if not transacoes:
-                    logger.log(f"     - Tentando detectar contratos futuros (BMF, WIN, WDO, DOL)...", "alerta")
+                    logger.log("     - Tentando detectar contratos futuros (BMF, WIN, WDO, DOL)...", "alerta")
                     try:
                         # Extrair texto do PDF
                         texto_pdf = extrair_texto_pdf(caminho_pdf)
@@ -612,10 +591,10 @@ def tentar_analisador_customizado(caminho_pdf, logger, modo_debug=True):
                             transacoes = transacoes_futuros
                             resultado['transacoes'] = transacoes_futuros
                         else:
-                            logger.log(f"     - Alerta: Nenhuma transação encontrada nesta nota", "alerta")
+                            logger.log("     - Alerta: Nenhuma transação encontrada nesta nota", "alerta")
                     except Exception as e:
                         logger.log(f"     - Erro ao tentar extrair contratos futuros: {str(e)}", "erro")
-                        logger.log(f"     - Alerta: Nenhuma transação encontrada nesta nota", "alerta")
+                        logger.log("     - Alerta: Nenhuma transação encontrada nesta nota", "alerta")
                 
                 # Mostrar transações encontradas (seja pelo parser original ou pela nossa função)
                 if transacoes:
@@ -632,7 +611,7 @@ def tentar_analisador_customizado(caminho_pdf, logger, modo_debug=True):
                 # Mostrar taxas e valores
                 taxas = resultado.get('taxas', {})
                 if taxas:
-                    logger.log(f"     - Taxas e valores:")
+                    logger.log("     - Taxas e valores:")
                     for nome, valor in taxas.items():
                         if valor > 0:
                             nome_formatado = nome.replace('_', ' ').title()
@@ -651,7 +630,7 @@ def tentar_analisador_customizado(caminho_pdf, logger, modo_debug=True):
             resultado = analisar_pdf_avancado(caminho_pdf)
             
             if resultado and resultado.get("sucesso"):
-                logger.log(f"  → Analisador avançado conseguiu extrair dados da nota", "sucesso")
+                logger.log("  → Analisador avançado conseguiu extrair dados da nota", "sucesso")
                 # Mostrar informações básicas da nota
                 logger.log(f"     - Número da Nota: {resultado.get('numero_nota', 'N/A')}")
                 logger.log(f"     - Data: {resultado.get('data_nota', 'N/A')}")
@@ -680,7 +659,7 @@ def tentar_analisador_customizado(caminho_pdf, logger, modo_debug=True):
             resultado = analisar_pdf_nota_corretagem(caminho_pdf)
             
             if resultado and resultado.get("sucesso"):
-                logger.log(f"  → Analisador básico conseguiu extrair dados da nota", "sucesso")
+                logger.log("  → Analisador básico conseguiu extrair dados da nota", "sucesso")
                 # Mostrar informações básicas da nota
                 logger.log(f"     - Número da Nota: {resultado.get('numero_nota', 'N/A')}")
                 logger.log(f"     - Data: {resultado.get('data_nota', 'N/A')}")
@@ -890,13 +869,11 @@ def processar_resultado_customizado(resultado, dados_por_mes, logger):
             # Processar cada transação encontrada
             for transacao in transacoes:
                 tipo = transacao.get('tipo', 'N/A')
-                tipo_texto = 'COMPRA' if tipo == 'C' else 'VENDA' if tipo == 'V' else 'OUTRO' if tipo == 'X' else tipo
                 ativo = transacao.get('ativo', 'N/A')
                 qtd = float(transacao.get('quantidade', 0))
                 preco = float(transacao.get('preco', 0))
                 tipo_negocio = transacao.get('tipo_negocio', '')
                 dc = transacao.get('dc', '')
-                preco_ajuste = transacao.get('preco_ajuste', preco)
                 
                 # Extrair campos específicos para mercado futuro
                 ticker = transacao.get('ticker', ativo)
@@ -1006,7 +983,7 @@ def processar_notas(modo, origem, log_widget, progress_bar, status_var):
             return False
         
         # Estatísticas finais
-        logger.log(f"Estatísticas do processamento:", "info")
+        logger.log("Estatísticas do processamento:", "info")
         logger.log(f"  → Arquivos PDF processados: {total_arquivos}")
         logger.log(f"  → Total de notas encontradas: {total_notas}")
         logger.log(f"  → Total de transações: {total_transacoes}")
@@ -1042,7 +1019,7 @@ def processar_notas(modo, origem, log_widget, progress_bar, status_var):
                                     elif len(partes) == 3:
                                         # Garantir o formato com zeros à esquerda
                                         registro['Vencimento'] = f"{int(partes[0]):02d}/{int(partes[1]):02d}/{partes[2]}"
-                            except:
+                            except Exception:
                                 pass  # Ignorar erros de formatação
                     
                 df = pd.DataFrame(dados)
@@ -1087,7 +1064,7 @@ def processar_notas(modo, origem, log_widget, progress_bar, status_var):
                             try:
                                 # Aplicar formatação monetária brasileira
                                 worksheet[cell].number_format = 'R$ #,##0.00'
-                            except:
+                            except Exception:
                                 pass  # Ignorar erros de formatação
                     
                     # Formatação específica para outras colunas
@@ -1103,7 +1080,7 @@ def processar_notas(modo, origem, log_widget, progress_bar, status_var):
                             cell = f"{col_letter}{row}"
                             try:
                                 worksheet[cell].number_format = 'dd/mm/yyyy'
-                            except:
+                            except Exception:
                                 pass
                     elif coluna == 'Quantidade':
                         worksheet.column_dimensions[col_letter].width = 10
@@ -1112,7 +1089,7 @@ def processar_notas(modo, origem, log_widget, progress_bar, status_var):
                             cell = f"{col_letter}{row}"
                             try:
                                 worksheet[cell].number_format = '#,##0'
-                            except:
+                            except Exception:
                                 pass
                     elif coluna == 'Tipo Negócio':
                         worksheet.column_dimensions[col_letter].width = 15
@@ -1123,7 +1100,7 @@ def processar_notas(modo, origem, log_widget, progress_bar, status_var):
                             cell = f"{col_letter}{row}"
                             try:
                                 worksheet[cell].alignment = workbook.styles.Alignment(horizontal='center')
-                            except:
+                            except Exception:
                                 pass
                 
                 logger.log(f"  → Planilha '{nome_aba}' criada com {len(df)} transações")
@@ -1270,7 +1247,8 @@ def processar_thread(modo, origem):
     
     except Exception as e:
         status_var.set("Erro durante processamento")
-        root.after(0, lambda: messagebox.showerror("Erro inesperado", str(e)))
+        erro_msg = str(e)
+        root.after(0, lambda msg=erro_msg: messagebox.showerror("Erro inesperado", msg))
     
     finally:
         # Reativar controles
@@ -1376,7 +1354,7 @@ root.minsize(800, 600)
 # Adicionar ícone para a janela (opcional)
 try:
     root.iconbitmap("icon.ico")  # Se tiver um ícone disponivel
-except:
+except Exception:
     pass  # Continuar sem ícone se não encontrar
 
 # Configurar tema escuro moderno
@@ -1500,8 +1478,7 @@ botao_processar.pack(padx=5, pady=5, fill=tk.X)
 botao_limpar = ttk.Button(
     btn_frame, 
     text="🗑️ Limpar Campos", 
-    command=lambda: [entrada_pasta.delete(0, tk.END), entrada_arquivo_pasta.delete(0, tk.END), 
-              entrada_arquivos.delete(0, tk.END), entrada_arquivo_individual.delete(0, tk.END)],
+    command=lambda: [entrada_pasta.delete(0, tk.END), entrada_arquivos.delete(0, tk.END)],
     width=20
 )
 botao_limpar.pack(padx=5, pady=5, fill=tk.X)

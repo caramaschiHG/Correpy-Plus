@@ -3,9 +3,7 @@ Script independente para extrair contratos futuros diretamente de PDFs de notas 
 """
 
 import re
-import os
 import pdfplumber
-from datetime import datetime
 
 def parse_valor(valor_str):
     """Converte string de valor para float"""
@@ -258,7 +256,7 @@ def extrair_contratos_futuros(texto):
     
     # Imprimir diagnóstico quando executado diretamente
     if __name__ == "__main__" and len(transacoes) > 0:
-        print(f"\nDetalhes dos contratos futuros detectados:")
+        print("\nDetalhes dos contratos futuros detectados:")
         print(f"{'Tipo':<5} {'Ativo':<15} {'Vencimento':<10} {'Mês':<10} {'Qtd':<8} {'Preço':<12} {'Total':<12}")
         print("-" * 75)
         for t in transacoes:
